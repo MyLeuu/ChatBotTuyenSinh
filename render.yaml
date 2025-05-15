@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: tuyensinh-chatbot
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: AIzaSyALa6vneqEcI339z5m2shZKx8k15wQ2iyA
+        sync: false
+      - key: PYTHON_VERSION
+        value: 3.9.0
+    healthCheckPath: /
+    autoDeploy: true 

@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chatbot Tư vấn Tuyển sinh ĐH Đồng Tháp</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <style>
+        /* Custom styles */
+        .chat-bubble-user {
+            background-color: #e0f2fe;
+            border-radius: 15px 15px 0 15px;
+            max-width: 80%;
+            padding: 10px 15px;
+            margin: 5px 0 5px 40px;
+            align-self: flex-end;
+        }
+        .chat-bubble-bot {
+            background-color: #f3f4f6;
+            border-radius: 15px 15px 15px 0;
+            max-width: 80%;
+            padding: 10px 15px;
+            margin: 5px 40px 5px 0;
+            align-self: flex-start;
+        }
+        .chat-bubble-bot p {
+            margin: 5px 0;
+        }
+        .chat-container {
+            height: 60vh;
+            overflow-y: auto;
+            scroll-behavior: smooth;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+        }
+        .avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            margin: 5px;
+        }
+        .avatar-user {
+            background-color: #3b82f6;
+            color: white;
+        }
+        .avatar-bot {
+            background-color: #10b981;
+            color: white;
+        }
+        .message-container {
+            display: flex;
+            align-items: flex-start;
+        }
+        .message-container.user {
+            flex-direction: row-reverse;
+        }
+        .loading-container {
+            display: none;
+            align-items: center;
+            margin-top: 10px;
+        }
+        .loading-spinner {
+            border: 4px solid #f3f4f6;
+            border-top: 4px solid #3b82f6;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .disabled-btn {
+            background-color: #d1d5db !important;
+            cursor: not-allowed !important;
+        }
+        /* Style for links */
+        .chat-bubble-bot a {
+            color: #2563eb;
+            text-decoration: underline;
+            transition: color 0.2s;
+        }
+        .chat-bubble-bot a:hover {
+            color: #1e40af;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen flex items-center justify-center">
+    <div class="w-full max-w-2xl mx-auto bg-white rounded-2xl shadow-xl p-6 m-4">
+        <h1 class="text-3xl font-bold text-center text-indigo-600 mb-6">Chatbot Tư vấn Tuyển sinh ĐH Đồng Tháp</h1>
+        
+        <!-- Chat container -->
+        <div class="chat-container flex flex-col bg-gray-50 rounded-lg p-4 mb-4 border border-gray-200">
+            {% if history %}
+                {% for q, a in history %}
+                    <div class="message-container user">
+                        <div class="avatar avatar-user"><i class="fas fa-user"></i></div>
+                        <div class="chat-bubble-user">
+                            <span class="font-semibold text-indigo-700">Bạn:</span> {{ q }}
+                        </div>
+                    </div>
+                    <div class="message-container">
+                        <div class="avatar avatar-bot"><i class="fas fa-robot"></i></div>
+                        <div class="chat-bubble-bot">
+                            <span class="font-semibold text-gray-700">Chatbot:</span>
+                            {{ a | safe }}
+                        </div>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <p class="text-center text-gray-500">Hãy đặt câu hỏi để bắt đầu!</p>
+            {% endif %}
+        </div>
+        
+        <!-- Input form -->
+        <form id="chat-form" class="flex gap-2">
+            <input type="text" name="query" id="query" class="flex-1 p-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Nhập câu hỏi của bạn..." required>
+            <button type="submit" id="submit-btn" class="bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 transition duration-200">
+                <i class="fas fa-paper-plane"></i> Gửi
+            </button>
+        </form>
+    </div>
+
+    <script>
+        // Auto-scroll to bottom of chat container
+        const chatContainer = document.querySelector('.chat-container');
+
+        // Function to scroll to bottom
+        function scrollToBottom() {
+            setTimeout(() => {
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+            }, 0);
+        }
+
+        // Scroll to bottom on page load
+        scrollToBottom();
+
+        // Create loading container dynamically
+        const loadingContainer = document.createElement('div');
+        loadingContainer.id = 'loading-container';
+        loadingContainer.className = 'loading-container';
+        loadingContainer.innerHTML = `
+            <div class="avatar avatar-bot"><i class="fas fa-robot"></i></div>
+            <div id="loading" class="loading-spinner"></div>
+        `;
+        loadingContainer.style.display = 'none';
+        chatContainer.appendChild(loadingContainer);
+
+        // Handle form submission with AJAX
+        document.getElementById('chat-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const queryInput = document.getElementById('query');
+            const submitBtn = document.getElementById('submit-btn');
+            const query = queryInput.value.trim();
+            if (!query) return;
+
+            // Disable input and button
+            queryInput.disabled = true;
+            submitBtn.disabled = true;
+            submitBtn.classList.add('disabled-btn');
+
+            // Show loading spinner with bot avatar
+            loadingContainer.style.display = 'flex';
+            const loadingSpinner = document.getElementById('loading');
+            loadingSpinner.style.display = 'block';
+            scrollToBottom();
+
+            // Add user message to chat
+            const userMessage = document.createElement('div');
+            userMessage.className = 'message-container user';
+            userMessage.innerHTML = `
+                <div class="avatar avatar-user"><i class="fas fa-user"></i></div>
+                <div class="chat-bubble-user">
+                    <span class="font-semibold text-indigo-700">Bạn:</span> ${query}
+                </div>
+            `;
+            chatContainer.insertBefore(userMessage, loadingContainer);
+            scrollToBottom();
+
+            try {
+                // Send query to server
+                const response = await fetch('/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: `query=${encodeURIComponent(query)}`
+                });
+                const data = await response.text();
+
+                // Add bot response to chat
+                const botMessage = document.createElement('div');
+                botMessage.className = 'message-container';
+                botMessage.innerHTML = `
+                    <div class="avatar avatar-bot"><i class="fas fa-robot"></i></div>
+                    <div class="chat-bubble-bot">
+                        <span class="font-semibold text-gray-700">Chatbot:</span> ${data}
+                    </div>
+                `;
+                chatContainer.insertBefore(botMessage, loadingContainer);
+                scrollToBottom();
+            } catch (error) {
+                const errorMessage = document.createElement('div');
+                errorMessage.className = 'message-container';
+                errorMessage.innerHTML = `
+                    <div class="avatar avatar-bot"><i class="fas fa-robot"></i></div>
+                    <div class="chat-bubble-bot">
+                        <span class="font-semibold text-gray-700">Chatbot:</span> Đã có lỗi xảy ra. Vui lòng thử lại!
+                    </div>
+                `;
+                chatContainer.insertBefore(errorMessage, loadingContainer);
+                scrollToBottom();
+            }
+
+            // Hide loading spinner and re-enable input/button
+            loadingContainer.style.display = 'none';
+            loadingSpinner.style.display = 'none';
+            queryInput.disabled = false;
+            submitBtn.disabled = false;
+            submitBtn.classList.remove('disabled-btn');
+
+            // Clear input and scroll to bottom
+            queryInput.value = '';
+            scrollToBottom();
+        });
+    </script>
+</body>
+</html>
